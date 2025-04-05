@@ -10,25 +10,42 @@ import { InfoIcon, BookOpenIcon } from 'lucide-react'
 
 export type VerseData = {
   id: string
-  surah_id: string
+  surah_id: number
   surah_name: string
-  ayah: string
+  ayah: number
   arabic_text: string
+  core_meaning: string
   english_translation: string
   x: number
   y: number
   z: number
   cluster: number
+  normalizedX?: number
+  normalizedY?: number
+  normalizedZ?: number
+}
+
+export type ClusterData = {
+  representative_id: string
+  surah_id: number
+  surah_name: string
+  ayah: number
+  core_meaning: string
+  arabic_text: string
+  centroid: number[]
 }
 
 export default function Home() {
-  const [data, setData] = useState<VerseData[]>([])
+  const [data, setData] = useState<{ points: VerseData[], clusters: Record<string, ClusterData> }>({ 
+    points: [], 
+    clusters: {} 
+  })
   const [loading, setLoading] = useState(true)
   const [selectedVerse, setSelectedVerse] = useState<VerseData | null>(null)
   const [showInfo, setShowInfo] = useState(true)
   
   useEffect(() => {
-    fetch('/quran_embeddings.json')
+    fetch('/quran_embeddings_5.json')
       .then(response => response.json())
       .then(data => {
         setData(data)
@@ -67,7 +84,10 @@ export default function Home() {
                 <Skeleton className="h-[600px] w-full" />
               </div>
             ) : (
-              <QuranVisualization data={data} onSelectVerse={setSelectedVerse} />
+              <QuranVisualization 
+                data={data.points} 
+                onSelectVerse={setSelectedVerse} 
+              />
             )}
             
             {selectedVerse && !showInfo && (

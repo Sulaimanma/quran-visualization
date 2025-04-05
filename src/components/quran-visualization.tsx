@@ -6,6 +6,7 @@ import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
 import { interpolateRainbow } from 'd3-scale-chromatic'
 import type { VerseData } from '@/app/page'
+import ClusterLabel from './ClusterLabel'
 
 type PointProps = {
   position: [number, number, number]
@@ -15,14 +16,12 @@ type PointProps = {
   isSelected: boolean
 }
 
-// Individual point component
+// Individual point component remains similar.
 const Point = ({ position, color, verse, onSelect, isSelected }: PointProps) => {
   const meshRef = useRef<THREE.Mesh>(null)
   
-  // Only animate selected points, not hovered ones
   useFrame(() => {
     if (!meshRef.current) return
-    
     if (isSelected) {
       meshRef.current.scale.x = THREE.MathUtils.lerp(meshRef.current.scale.x, 1.3, 0.1)
       meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, 1.3, 0.1)
@@ -35,12 +34,8 @@ const Point = ({ position, color, verse, onSelect, isSelected }: PointProps) => 
   })
   
   return (
-    <mesh
-      ref={meshRef}
-      position={position}
-      onClick={() => onSelect(verse)}
-    >
-      <sphereGeometry args={[0.015, 8, 8]} /> {/* Reduced complexity */}
+    <mesh ref={meshRef} position={position} onClick={() => onSelect(verse)}>
+      <sphereGeometry args={[0.015, 8, 8]} />
       <meshStandardMaterial 
         color={color} 
         emissive={isSelected ? 'white' : color}
@@ -55,21 +50,20 @@ type PointCloudProps = {
   onSelectVerse: (verse: VerseData) => void
 }
 
-// Main visualization component
 const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
   const [selectedVerse, setSelectedVerse] = useState<VerseData | null>(null)
   
-  // Normalize data for visualization
-  const { normalizedData, colorScale } = useMemo(() => {
+  // Compute normalized positions and compute groupings by core_meaning.
+  const { normalizedData, colorScale, clusterCentroids } = useMemo(() => {
     if (!data.length) return { 
       normalizedData: [], 
-      colorScale: () => '#ffffff'
+      colorScale: () => '#ffffff',
+      clusterCentroids: {}
     }
-
+    
+    // Compute bounds for normalization.
     let minX = Infinity, minY = Infinity, minZ = Infinity
     let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
-    
-    // Find bounds
     data.forEach(point => {
       minX = Math.min(minX, point.x)
       minY = Math.min(minY, point.y)
@@ -79,8 +73,7 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
       maxZ = Math.max(maxZ, point.z)
     })
     
-    // Create a normalized copy with increased spacing between points
-    const spreadFactor = 4; // Increase this to spread points more
+    const spreadFactor = 4
     const normalizedData = data.map(point => ({
       ...point,
       normalizedX: ((point.x - minX) / (maxX - minX) * 2 - 1) * spreadFactor,
@@ -88,20 +81,29 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
       normalizedZ: ((point.z - minZ) / (maxZ - minZ) * 2 - 1) * spreadFactor,
     }))
     
-    // Get clusters for coloring
-    const clusters = Array.from(new Set(data.map(point => point.cluster)))
-    const numClusters = clusters.length
-    
-    // Create color scale based on semantic similarity (clusters)
-    const colorScale = (cluster: number) => {
-      const normalizedValue = clusters.indexOf(cluster) / (numClusters - 1)
+    // Create a color scale based on unique core_meaning strings.
+    const uniqueCores = Array.from(new Set(normalizedData.map(p => p.core_meaning.trim()))).sort()
+    const numCores = uniqueCores.length
+    const colorScale = (core: string) => {
+      const index = uniqueCores.indexOf(core.trim())
+      if (index === -1 || numCores === 1) return '#ffffff'
+      const normalizedValue = index / (numCores - 1)
       return interpolateRainbow(normalizedValue)
     }
     
-    return { 
-      normalizedData,
-      colorScale
-    }
+    // Compute cluster centroids by grouping points with the same core meaning.
+    const clusterCentroids: Record<string, [number, number, number]> = {}
+    uniqueCores.forEach(core => {
+      const clusterPoints = normalizedData.filter(p => p.core_meaning.trim() === core)
+      if (clusterPoints.length > 0) {
+        const avgX = clusterPoints.reduce((sum, p) => sum + p.normalizedX, 0) / clusterPoints.length
+        const avgY = clusterPoints.reduce((sum, p) => sum + p.normalizedY, 0) / clusterPoints.length
+        const avgZ = clusterPoints.reduce((sum, p) => sum + p.normalizedZ, 0) / clusterPoints.length
+        clusterCentroids[core] = [avgX, avgY, avgZ]
+      }
+    })
+    
+    return { normalizedData, colorScale, clusterCentroids }
   }, [data])
   
   const handleSelectVerse = (verse: VerseData) => {
@@ -110,18 +112,31 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
   }
   
   return (
-    <Canvas camera={{ position: [0, 0, 10], fov: 50 }}> {/* Adjusted camera position for better view */}
+    <Canvas camera={{ position: [0, 0, 10], fov: 50 }}>
       <ambientLight intensity={0.5} />
       <pointLight position={[10, 10, 10]} intensity={1} />
       
+      {/* Render individual points */}
       {normalizedData.map((verse, index) => (
         <Point
           key={`verse-${verse.surah_id}-${verse.ayah}-${index}`}
           position={[verse.normalizedX, verse.normalizedY, verse.normalizedZ]}
-          color={colorScale(verse.cluster)}
+          color={colorScale(verse.core_meaning)}
           verse={verse}
           onSelect={handleSelectVerse}
           isSelected={selectedVerse?.id === verse.id}
+        />
+      ))}
+      
+      {/* Render cluster labels based on core meaning. 
+          Assume ClusterLabel hides itself when the camera is too close (using the hideDistance prop). */}
+      {Object.entries(clusterCentroids).map(([core, position]) => (
+        <ClusterLabel
+          key={`cluster-${core}`}
+          position={position}
+          text={core || 'Cluster'}
+          color={colorScale(core)}
+          hideDistance={8} // Adjust threshold as needed.
         />
       ))}
       
@@ -130,10 +145,9 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
         dampingFactor={0.05} 
         rotateSpeed={0.5}
         zoomSpeed={0.7}
-        maxDistance={20} // Limit how far users can zoom out
+        maxDistance={20}
       />
       
-      {/* Grid to help with orientation */}
       <gridHelper args={[10, 20]} position={[0, -5, 0]} />
     </Canvas>
   )
