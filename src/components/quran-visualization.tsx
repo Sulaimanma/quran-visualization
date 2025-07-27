@@ -14,32 +14,34 @@ type PointProps = {
   verse: VerseData
   onSelect: (verse: VerseData) => void
   isSelected: boolean
+  activeCluster: string | null
 }
 
 // Individual point component remains similar.
-const Point = ({ position, color, verse, onSelect, isSelected }: PointProps) => {
+const Point = ({ position, color, verse, onSelect, isSelected, activeCluster }: PointProps) => {
   const meshRef = useRef<THREE.Mesh>(null)
-  
+  const isHighlighted = activeCluster ? verse.core_meaning.trim() === activeCluster : false
+
   useFrame(() => {
     if (!meshRef.current) return
-    if (isSelected) {
-      meshRef.current.scale.x = THREE.MathUtils.lerp(meshRef.current.scale.x, 1.3, 0.1)
-      meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, 1.3, 0.1)
-      meshRef.current.scale.z = THREE.MathUtils.lerp(meshRef.current.scale.z, 1.3, 0.1)
-    } else {
-      meshRef.current.scale.x = THREE.MathUtils.lerp(meshRef.current.scale.x, 1, 0.1)
-      meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, 1, 0.1)
-      meshRef.current.scale.z = THREE.MathUtils.lerp(meshRef.current.scale.z, 1, 0.1)
-    }
+    const highlightScale = activeCluster ? 1.6 : 1.3
+    const targetScale = isSelected || isHighlighted ? highlightScale : 1
+    meshRef.current.scale.x = THREE.MathUtils.lerp(meshRef.current.scale.x, targetScale, 0.1)
+    meshRef.current.scale.y = THREE.MathUtils.lerp(meshRef.current.scale.y, targetScale, 0.1)
+    meshRef.current.scale.z = THREE.MathUtils.lerp(meshRef.current.scale.z, targetScale, 0.1)
   })
-  
+
+  const baseSize = activeCluster ? 0.02 : 0.015
+
+  if (activeCluster && !isHighlighted) return null
+
   return (
     <mesh ref={meshRef} position={position} onClick={() => onSelect(verse)}>
-      <sphereGeometry args={[0.015, 8, 8]} />
-      <meshStandardMaterial 
-        color={color} 
-        emissive={isSelected ? 'white' : color}
-        emissiveIntensity={isSelected ? 0.5 : 0}
+      <sphereGeometry args={[baseSize, 12, 12]} />
+      <meshStandardMaterial
+        color={color}
+        emissive={isSelected || isHighlighted ? 'white' : color}
+        emissiveIntensity={isSelected ? 0.5 : isHighlighted ? 0.3 : 0}
       />
     </mesh>
   )
@@ -52,6 +54,7 @@ type PointCloudProps = {
 
 const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
   const [selectedVerse, setSelectedVerse] = useState<VerseData | null>(null)
+  const [activeCluster, setActiveCluster] = useState<string | null>(null)
   
   // Compute normalized positions and compute groupings by core_meaning.
   const { normalizedData, colorScale, clusterCentroids } = useMemo(() => {
@@ -117,7 +120,10 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
       <pointLight position={[10, 10, 10]} intensity={1} />
       
       {/* Render individual points */}
-      {normalizedData.map((verse, index) => (
+      {(activeCluster ?
+        normalizedData.filter(v => v.core_meaning.trim() === activeCluster) :
+        normalizedData
+      ).map((verse, index) => (
         <Point
           key={`verse-${verse.surah_id}-${verse.ayah}-${index}`}
           position={[verse.normalizedX, verse.normalizedY, verse.normalizedZ]}
@@ -125,16 +131,22 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
           verse={verse}
           onSelect={handleSelectVerse}
           isSelected={selectedVerse?.id === verse.id}
+          activeCluster={activeCluster}
         />
       ))}
       
       {/* Render cluster labels based on core meaning */}
-      {Object.entries(clusterCentroids).map(([core, position]) => (
+      {(activeCluster ?
+        Object.entries(clusterCentroids).filter(([core]) => core === activeCluster) :
+        Object.entries(clusterCentroids)
+      ).map(([core, position]) => (
         <ClusterLabel
           key={`cluster-${core}`}
           position={position}
           text={core || 'Cluster'}
           color={colorScale(core)}
+          onClick={() => setActiveCluster(c => (c === core ? null : core))}
+          active={activeCluster === core}
         />
       ))}
       
