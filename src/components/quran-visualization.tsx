@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useMemo } from 'react'
+import { useRef, useState, useMemo, useEffect } from 'react'
 import { Canvas, useFrame } from '@react-three/fiber'
 import { OrbitControls } from '@react-three/drei'
 import * as THREE from 'three'
@@ -50,11 +50,18 @@ const Point = ({ position, color, verse, onSelect, isSelected, activeCluster }: 
 type PointCloudProps = {
   data: VerseData[]
   onSelectVerse: (verse: VerseData) => void
+  focusCluster?: string | null
 }
 
-const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
+const QuranVisualization = ({ data, onSelectVerse, focusCluster }: PointCloudProps) => {
   const [selectedVerse, setSelectedVerse] = useState<VerseData | null>(null)
   const [activeCluster, setActiveCluster] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (focusCluster !== undefined) {
+      setActiveCluster(focusCluster)
+    }
+  }, [focusCluster])
   
   // Compute normalized positions and compute groupings by core_meaning.
   const { normalizedData, colorScale, clusterCentroids } = useMemo(() => {

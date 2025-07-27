@@ -6,6 +6,7 @@ import VerseDetails from '@/components/verse-details'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { InfoIcon, BookOpenIcon } from 'lucide-react'
 
 export type VerseData = {
@@ -43,7 +44,9 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [selectedVerse, setSelectedVerse] = useState<VerseData | null>(null)
   const [showInfo, setShowInfo] = useState(true)
-  
+  const [search, setSearch] = useState('')
+  const [focusCluster, setFocusCluster] = useState<string | null>(null)
+
   useEffect(() => {
     fetch('/quran_embeddings_5.json')
       .then(response => response.json())
@@ -56,19 +59,40 @@ export default function Home() {
         setLoading(false)
       })
   }, [])
+
+  function handleSearch(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!search.trim()) {
+      setFocusCluster(null)
+      return
+    }
+    const entry = Object.values(data.clusters).find(c =>
+      c.core_meaning.toLowerCase().includes(search.toLowerCase())
+    )
+    setFocusCluster(entry ? entry.core_meaning.trim() : null)
+  }
   return (
     <main className="flex min-h-screen flex-col bg-background">
       <div className="container mx-auto p-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-          <div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+          <div className="flex-1">
             <h1 className="text-3xl font-bold">Quran Verses in Semantic Space</h1>
             <p className="text-muted-foreground mt-2">
-              Explore the semantic relationships between Quran verses. 
+              Explore the semantic relationships between Quran verses.
               Similar colors indicate similar meanings.
             </p>
           </div>
-          <Button 
-            variant="outline" 
+          <form onSubmit={handleSearch} className="flex gap-2 items-center">
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search theme..."
+              className="w-40"
+            />
+            <Button type="submit" variant="outline">Search</Button>
+          </form>
+          <Button
+            variant="outline"
             className="mt-2 sm:mt-0"
             onClick={() => setShowInfo(!showInfo)}
           >
@@ -76,6 +100,10 @@ export default function Home() {
             {showInfo ? "Hide Info" : "Show Info"}
           </Button>
         </div>
+
+        {focusCluster && (
+          <p className="mb-4 text-sm text-muted-foreground">Focusing on: {focusCluster}</p>
+        )}
         
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <div className={`${showInfo ? 'lg:col-span-3' : 'lg:col-span-4'} h-[700px] bg-muted rounded-lg overflow-hidden relative`}>
@@ -84,9 +112,10 @@ export default function Home() {
                 <Skeleton className="h-[600px] w-full" />
               </div>
             ) : (
-              <QuranVisualization 
-                data={data.points} 
-                onSelectVerse={setSelectedVerse} 
+              <QuranVisualization
+                data={data.points}
+                onSelectVerse={setSelectedVerse}
+                focusCluster={focusCluster}
               />
             )}
             
