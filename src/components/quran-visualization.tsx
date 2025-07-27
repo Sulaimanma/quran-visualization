@@ -128,15 +128,13 @@ const QuranVisualization = ({ data, onSelectVerse }: PointCloudProps) => {
         />
       ))}
       
-      {/* Render cluster labels based on core meaning. 
-          Assume ClusterLabel hides itself when the camera is too close (using the hideDistance prop). */}
+      {/* Render cluster labels based on core meaning */}
       {Object.entries(clusterCentroids).map(([core, position]) => (
         <ClusterLabel
           key={`cluster-${core}`}
           position={position}
           text={core || 'Cluster'}
           color={colorScale(core)}
-          hideDistance={8} // Adjust threshold as needed.
         />
       ))}
       
