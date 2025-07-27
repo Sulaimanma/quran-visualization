@@ -7,9 +7,11 @@ type ClusterLabelProps = {
   position: [number, number, number]
   text: string
   color: string
+  onClick?: () => void
+  active?: boolean
 }
 
-const ClusterLabel = ({ position, text, color }: ClusterLabelProps) => {
+const ClusterLabel = ({ position, text, color, onClick, active = false }: ClusterLabelProps) => {
   const groupRef = useRef<THREE.Group>(null)
   const { camera } = useThree()
 
@@ -20,9 +22,9 @@ const ClusterLabel = ({ position, text, color }: ClusterLabelProps) => {
   })
 
   return (
-    <group ref={groupRef} position={position}>
+    <group ref={groupRef} position={position} onClick={onClick}>
       {/* Optional colored sprite behind the text */}
-      <sprite scale={[1, 0.5, 1]} position={[0, 0.1, 0]}>
+      <sprite scale={active ? [1.2, 0.6, 1.2] : [1, 0.5, 1]} position={[0, 0.1, 0]}>
         <spriteMaterial transparent opacity={0.7} color={color} />
       </sprite>
       <Html distanceFactor={10}>
@@ -35,7 +37,8 @@ const ClusterLabel = ({ position, text, color }: ClusterLabelProps) => {
           whiteSpace: 'nowrap',
           userSelect: 'none',
           pointerEvents: 'none',
-          transform: 'translate3d(-50%, -50%, 0)'
+          transform: 'translate3d(-50%, -50%, 0)',
+          border: active ? '1px solid white' : undefined
         }}>
           {text}
         </div>
